@@ -15,6 +15,13 @@
       "when": 1779477141332,
       "tag": "0001_unique_sasquatch",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779479177479,
+      "tag": "0002_fat_strong_guy",
+      "breakpoints": true
     }
   ]
 }
