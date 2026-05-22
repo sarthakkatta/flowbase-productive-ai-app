@@ -8,6 +8,13 @@
       "when": 1779454956707,
       "tag": "0000_spooky_tarantula",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779477141332,
+      "tag": "0001_unique_sasquatch",
+      "breakpoints": true
     }
   ]
 }
