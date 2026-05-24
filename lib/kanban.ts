@@ -35,6 +35,16 @@ export type KanbanBoardDTO = {
   columns: KanbanColumnDTO[];
 };
 
+export type KanbanCollaboratorDTO = {
+  id: string;
+  name: string;
+  email: string;
+  imageUrl: string | null;
+  color: string;
+  role: "owner" | "collaborator";
+  status: "active" | "pending";
+};
+
 export type KanbanBoardInput = {
   name: string;
   color: string;
@@ -59,6 +69,11 @@ export type KanbanTaskInput = {
 
 export const defaultKanbanColumns = ["Todo", "In Progress", "Done"] as const;
 export const maxKanbanColumns = 5;
+export const kanbanRoomPrefix = "kanban-board-";
+
+export function getKanbanRoomId(boardId: number) {
+  return `${kanbanRoomPrefix}${boardId}`;
+}
 
 export const boardColorOptions = ["#00b894", "#3f6df6", "#f5a524", "#f04f78", "#7c5cff", "#ff6b4a"] as const;
 
@@ -68,6 +83,13 @@ export const defaultKanbanLabels: KanbanLabel[] = [
   { name: "Work", color: "#3f6df6" },
   { name: "Focus", color: "#7c5cff" },
 ];
+
+export function getAvatarColor(seed: string) {
+  const colors = boardColorOptions;
+  const hash = [...seed].reduce((value, character) => value + character.charCodeAt(0), 0);
+
+  return colors[hash % colors.length];
+}
 
 export function normalizePriority(priority: string): KanbanPriority {
   if (priority === "high" || priority === "medium" || priority === "low") {

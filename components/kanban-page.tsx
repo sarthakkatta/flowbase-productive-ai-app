@@ -12,6 +12,7 @@ import {
   Inbox,
   Layers3,
   Loader2,
+  MessageCircle,
   MoreHorizontal,
   Plus,
   Sparkles,
@@ -29,10 +30,18 @@ import {
   updateKanbanColumn,
   updateKanbanTask,
 } from "@/app/kanban/actions";
+import {
+  CollaborationButton,
+  CollaborationPanel,
+  CollaboratorAvatars,
+  TaskCommentBadge,
+  TaskCommentsDrawer,
+} from "@/components/kanban-collaboration";
 import { Button } from "@/components/ui/button";
 import {
   boardColorOptions,
   defaultKanbanLabels,
+  getKanbanRoomId,
   labelColorOptions,
   maxKanbanColumns,
   type KanbanBoardDTO,
@@ -41,6 +50,7 @@ import {
   type KanbanTaskDTO,
 } from "@/lib/kanban";
 import { cn } from "@/lib/utils";
+import { ClientSideSuspense, RoomProvider } from "@/liveblocks.config";
 
 type BoardDialogState = {
   open: boolean;
@@ -140,6 +150,8 @@ export function KanbanPage() {
   const [editingColumnId, setEditingColumnId] = useState<number | null>(null);
   const [editingColumnName, setEditingColumnName] = useState("");
   const [dropTargetColumnId, setDropTargetColumnId] = useState<number | null>(null);
+  const [collaborationPanelOpen, setCollaborationPanelOpen] = useState(false);
+  const [commentTask, setCommentTask] = useState<KanbanTaskDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -441,8 +453,26 @@ export function KanbanPage() {
         ) : null}
 
         {selectedBoard ? (
-          <div className="flex min-h-0 flex-1 flex-col p-4">
-            <div className="mb-4 flex flex-wrap items-end gap-2">
+          <RoomProvider
+            key={selectedBoard.id}
+            id={getKanbanRoomId(selectedBoard.id)}
+            initialPresence={{ activeTaskId: null }}
+          >
+            <ClientSideSuspense
+              fallback={
+                <div className="grid min-h-[520px] flex-1 place-items-center p-8 text-center lg:min-h-0">
+                  <Loader2 className="mx-auto size-5 animate-spin text-[#256f63]" aria-hidden="true" />
+                  <p className="mt-3 text-sm font-semibold text-[#665f55]">Opening collaboration room...</p>
+                </div>
+              }
+            >
+              <div className="flex min-h-0 flex-1 flex-col p-4">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <CollaboratorAvatars />
+                  <CollaborationButton onClick={() => setCollaborationPanelOpen(true)} />
+                </div>
+
+                <div className="mb-4 flex flex-wrap items-end gap-2">
               <label className="min-w-[220px] flex-1 space-y-1.5">
                 <span className="text-xs font-semibold text-[#665f55]">New column</span>
                 <input
@@ -544,6 +574,7 @@ export function KanbanPage() {
                             key={task.id}
                             task={task}
                             onEdit={openEditTask}
+                            onComment={setCommentTask}
                             onDelete={removeTask}
                           />
                         ))
@@ -580,7 +611,27 @@ export function KanbanPage() {
                 </div>
               </div>
             )}
-          </div>
+
+                {taskDialog.open ? (
+                  <TaskDialog
+                    form={taskForm}
+                    setForm={setTaskForm}
+                    mode={taskDialog.mode}
+                    onClose={closeTaskDialog}
+                    onSave={saveTask}
+                    isPending={isPending}
+                  />
+                ) : null}
+
+                <CollaborationPanel
+                  boardId={selectedBoard.id}
+                  open={collaborationPanelOpen}
+                  onClose={() => setCollaborationPanelOpen(false)}
+                />
+                <TaskCommentsDrawer task={commentTask} open={Boolean(commentTask)} onClose={() => setCommentTask(null)} />
+              </div>
+            </ClientSideSuspense>
+          </RoomProvider>
         ) : (
           <div className="grid min-h-[520px] flex-1 place-items-center p-8 text-center lg:min-h-0">
             <div>
@@ -654,16 +705,6 @@ export function KanbanPage() {
         </div>
       ) : null}
 
-      {taskDialog.open ? (
-        <TaskDialog
-          form={taskForm}
-          setForm={setTaskForm}
-          mode={taskDialog.mode}
-          onClose={closeTaskDialog}
-          onSave={saveTask}
-          isPending={isPending}
-        />
-      ) : null}
     </section>
   );
 }
@@ -671,10 +712,12 @@ export function KanbanPage() {
 function TaskCard({
   task,
   onEdit,
+  onComment,
   onDelete,
 }: {
   task: KanbanTaskDTO;
   onEdit: (task: KanbanTaskDTO) => void;
+  onComment: (task: KanbanTaskDTO) => void;
   onDelete: (task: KanbanTaskDTO) => void;
 }) {
   return (
@@ -734,6 +777,15 @@ function TaskCard({
             </span>
           ) : null}
         </div>
+        <button
+          type="button"
+          className="relative grid size-7 place-items-center rounded-lg text-[#7c756a] transition-colors hover:bg-[#eef8ef] hover:text-[#256f63]"
+          onClick={() => onComment(task)}
+          aria-label={`Open comments for ${task.title}`}
+        >
+          <MessageCircle className="size-4" aria-hidden="true" />
+          <TaskCommentBadge taskId={task.id} />
+        </button>
         <button
           type="button"
           className="grid size-7 place-items-center rounded-lg text-[#a3462e] transition-colors hover:bg-[#fff0ec]"

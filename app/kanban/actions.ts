@@ -1,17 +1,19 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 
-import { calendarItems, db, kanbanBoards, kanbanColumns, kanbanTasks, users } from "@/db";
+import { calendarItems, db, kanbanBoardShares, kanbanBoards, kanbanColumns, kanbanTasks, users } from "@/db";
 import {
   defaultKanbanColumns,
+  getAvatarColor,
   maxKanbanColumns,
   normalizePriority,
   type KanbanBoardDTO,
   type KanbanBoardInput,
   type KanbanColumnDTO,
   type KanbanColumnInput,
+  type KanbanCollaboratorDTO,
   type KanbanLabel,
   type KanbanTaskDTO,
   type KanbanTaskInput,
@@ -42,6 +44,19 @@ async function getCurrentDatabaseUserId() {
   return existingUser.id;
 }
 
+async function getCurrentDatabaseUser() {
+  const userId = await getCurrentDatabaseUserId();
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, userId),
+  });
+
+  if (!user) {
+    throw new Error("Unable to load the signed-in user.");
+  }
+
+  return user;
+}
+
 function toTaskDTO(task: typeof kanbanTasks.$inferSelect): KanbanTaskDTO {
   return {
     id: task.id,
@@ -61,11 +76,39 @@ function toTaskDTO(task: typeof kanbanTasks.$inferSelect): KanbanTaskDTO {
 
 async function assertBoardAccess(boardId: number, userId: number) {
   const board = await db.query.kanbanBoards.findFirst({
-    where: and(eq(kanbanBoards.id, boardId), eq(kanbanBoards.userId, userId)),
+    where: eq(kanbanBoards.id, boardId),
   });
 
   if (!board) {
     throw new Error("Kanban board was not found.");
+  }
+
+  if (board.userId === userId) {
+    return board;
+  }
+
+  const share = await db.query.kanbanBoardShares.findFirst({
+    where: and(
+      eq(kanbanBoardShares.boardId, boardId),
+      eq(kanbanBoardShares.userId, userId),
+      eq(kanbanBoardShares.status, "active")
+    ),
+  });
+
+  if (!share) {
+    throw new Error("Kanban board was not found.");
+  }
+
+  return board;
+}
+
+async function assertBoardOwner(boardId: number, userId: number) {
+  const board = await db.query.kanbanBoards.findFirst({
+    where: and(eq(kanbanBoards.id, boardId), eq(kanbanBoards.userId, userId)),
+  });
+
+  if (!board) {
+    throw new Error("Only the board owner can manage collaboration settings.");
   }
 
   return board;
@@ -150,9 +193,16 @@ async function deleteLinkedCalendarTask(userId: number, calendarItemId: number |
 
 export async function listKanbanBoards(): Promise<KanbanBoardDTO[]> {
   const userId = await getCurrentDatabaseUserId();
+  const activeShares = await db.query.kanbanBoardShares.findMany({
+    where: and(eq(kanbanBoardShares.userId, userId), eq(kanbanBoardShares.status, "active")),
+  });
+  const sharedBoardIds = activeShares.map((share) => share.boardId);
+  const boardWhere = sharedBoardIds.length
+    ? or(eq(kanbanBoards.userId, userId), inArray(kanbanBoards.id, sharedBoardIds))
+    : eq(kanbanBoards.userId, userId);
   const [boards, columns, tasks] = await Promise.all([
     db.query.kanbanBoards.findMany({
-      where: eq(kanbanBoards.userId, userId),
+      where: boardWhere,
       orderBy: (board, { asc }) => [asc(board.createdAt)],
     }),
     db.query.kanbanColumns.findMany({
@@ -411,4 +461,105 @@ export async function moveKanbanTask(taskId: number, targetColumnId: number, pos
     .returning();
 
   return toTaskDTO(updated);
+}
+
+function toCollaboratorDTO(
+  id: string,
+  name: string | null,
+  email: string,
+  imageUrl: string | null,
+  role: KanbanCollaboratorDTO["role"],
+  status: KanbanCollaboratorDTO["status"]
+): KanbanCollaboratorDTO {
+  const displayName = name || email.split("@")[0] || email;
+
+  return {
+    id,
+    name: displayName,
+    email,
+    imageUrl,
+    color: getAvatarColor(email),
+    role,
+    status,
+  };
+}
+
+export async function listKanbanBoardCollaborators(boardId: number): Promise<KanbanCollaboratorDTO[]> {
+  const userId = await getCurrentDatabaseUserId();
+  const board = await assertBoardAccess(boardId, userId);
+  const owner = await db.query.users.findFirst({ where: eq(users.id, board.userId) });
+  const shares = await db.query.kanbanBoardShares.findMany({
+    where: eq(kanbanBoardShares.boardId, boardId),
+    orderBy: (share, { asc }) => [asc(share.createdAt)],
+  });
+  const activeShareUserIds = shares.map((share) => share.userId).filter((id): id is number => Boolean(id));
+  const shareUsers = activeShareUserIds.length
+    ? await db.query.users.findMany({
+        where: inArray(users.id, activeShareUserIds),
+      })
+    : [];
+  const usersById = new Map(shareUsers.map((user) => [user.id, user]));
+
+  return [
+    toCollaboratorDTO(
+      `owner-${board.userId}`,
+      owner?.name ?? owner?.email ?? "Board owner",
+      owner?.email ?? "owner",
+      owner?.imageUrl ?? null,
+      "owner",
+      "active"
+    ),
+    ...shares.map((share) => {
+      const sharedUser = share.userId ? usersById.get(share.userId) : null;
+      return toCollaboratorDTO(
+        `share-${share.id}`,
+        sharedUser?.name ?? null,
+        share.email,
+        sharedUser?.imageUrl ?? null,
+        "collaborator",
+        share.status === "active" ? "active" : "pending"
+      );
+    }),
+  ];
+}
+
+export async function inviteKanbanBoardCollaborator(
+  boardId: number,
+  rawEmail: string
+): Promise<KanbanCollaboratorDTO[]> {
+  const currentUser = await getCurrentDatabaseUser();
+  const board = await assertBoardOwner(boardId, currentUser.id);
+  const email = rawEmail.trim().toLowerCase();
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error("Add a valid email address.");
+  }
+
+  const owner = await db.query.users.findFirst({ where: eq(users.id, board.userId) });
+  if (owner?.email.toLowerCase() === email) {
+    throw new Error("The board owner already has access.");
+  }
+
+  const invitedUser = await db.query.users.findFirst({ where: eq(users.email, email) });
+  const existingShare = await db.query.kanbanBoardShares.findFirst({
+    where: and(eq(kanbanBoardShares.boardId, boardId), eq(kanbanBoardShares.email, email)),
+  });
+  const now = new Date();
+  const values = {
+    boardId,
+    userId: invitedUser?.id ?? null,
+    email,
+    role: "collaborator",
+    status: invitedUser ? "active" : "pending",
+    invitedByUserId: currentUser.id,
+    updatedAt: now,
+  };
+
+  if (existingShare) {
+    await db.update(kanbanBoardShares).set(values).where(eq(kanbanBoardShares.id, existingShare.id));
+  } else {
+    await db.insert(kanbanBoardShares).values({ ...values, createdAt: now });
+  }
+
+  return listKanbanBoardCollaborators(boardId);
 }
