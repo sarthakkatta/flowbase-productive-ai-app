@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
+import { SignOutButton, UserButton } from "@clerk/nextjs";
 import {
   Bot,
   CalendarDays,
@@ -16,6 +17,7 @@ import {
   Search,
   Settings,
   Sparkles,
+  LogOut,
   StickyNote,
   WandSparkles,
 } from "lucide-react";
@@ -162,6 +164,19 @@ export function AppShell({ children, eyebrow, title, searchPlaceholder = "Search
                 placeholder={searchPlaceholder}
                 type="search"
               />
+            </div>
+            <div className="flex items-center gap-2">
+              <SignOutButton redirectUrl="/sign-in">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 rounded-lg border-[#e7e1d6] bg-white text-[#5b5349] hover:bg-[#eef8ef] hover:text-[#256f63]"
+                >
+                  <LogOut className="mr-2 size-4 text-[#ff6b4a]" aria-hidden="true" />
+                  Switch account
+                </Button>
+              </SignOutButton>
+              <UserButton />
             </div>
           </header>
           {children}

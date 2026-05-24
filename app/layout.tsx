@@ -1,6 +1,8 @@
 import { ClerkProvider } from '@clerk/nextjs';
+import "@liveblocks/react-ui/styles.css";
 import "./globals.css";
 import type { Metadata } from "next";
+import { AppLiveblocksProvider } from "@/components/liveblocks-provider";
 
 export const metadata: Metadata = {
   title: "Next.js Premium Startup Boilerplate",
@@ -16,7 +18,7 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en">
         <body style={{ margin: 0, padding: 0 }}>
-          {children}
+          <AppLiveblocksProvider>{children}</AppLiveblocksProvider>
         </body>
       </html>
     </ClerkProvider>

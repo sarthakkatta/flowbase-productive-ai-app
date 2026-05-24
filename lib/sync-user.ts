@@ -1,7 +1,14 @@
 import { currentUser } from "@clerk/nextjs/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
-import { db, users } from "@/db";
+import { db, kanbanBoardShares, users } from "@/db";
+
+async function activatePendingSharesForUser(userId: number, email: string) {
+  await db
+    .update(kanbanBoardShares)
+    .set({ userId, status: "active", updatedAt: new Date() })
+    .where(and(eq(kanbanBoardShares.email, email.toLowerCase()), eq(kanbanBoardShares.status, "pending")));
+}
 
 export async function syncCurrentUserToDatabase() {
   const clerkUser = await currentUser();
@@ -44,6 +51,7 @@ export async function syncCurrentUserToDatabase() {
       .update(users)
       .set(userValues)
       .where(eq(users.id, existingByClerkId.id));
+    await activatePendingSharesForUser(existingByClerkId.id, primaryEmail.emailAddress);
 
     return { status: "updated" as const, userId: existingByClerkId.id };
   }
@@ -54,6 +62,7 @@ export async function syncCurrentUserToDatabase() {
 
   if (existingByEmail) {
     await db.update(users).set(userValues).where(eq(users.id, existingByEmail.id));
+    await activatePendingSharesForUser(existingByEmail.id, primaryEmail.emailAddress);
 
     return { status: "updated" as const, userId: existingByEmail.id };
   }
@@ -62,6 +71,7 @@ export async function syncCurrentUserToDatabase() {
     .insert(users)
     .values({ ...userValues, createdAt: now })
     .returning({ id: users.id });
+  await activatePendingSharesForUser(createdUser.id, primaryEmail.emailAddress);
 
   return { status: "created" as const, userId: createdUser.id };
 }
