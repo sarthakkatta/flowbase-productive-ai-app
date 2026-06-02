@@ -131,3 +131,120 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer components {
+  .notes-editor-content {
+    color: #24201c;
+    font-size: 16px;
+    line-height: 1.75;
+    overflow-wrap: anywhere;
+  }
+
+  .notes-editor-content p.is-editor-empty:first-child::before {
+    color: #b4ab9d;
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+  }
+
+  .notes-editor-content h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.2;
+    margin: 1.3rem 0 0.65rem;
+  }
+
+  .notes-editor-content h2 {
+    font-size: 1.45rem;
+    font-weight: 700;
+    line-height: 1.3;
+    margin: 1.15rem 0 0.55rem;
+  }
+
+  .notes-editor-content h3 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1.35;
+    margin: 1rem 0 0.45rem;
+  }
+
+  .notes-editor-content p,
+  .notes-editor-content ul,
+  .notes-editor-content ol,
+  .notes-editor-content blockquote,
+  .notes-editor-content pre {
+    margin: 0.55rem 0;
+  }
+
+  .notes-editor-content ul,
+  .notes-editor-content ol {
+    padding-left: 1.5rem;
+  }
+
+  .notes-editor-content ul {
+    list-style: disc;
+  }
+
+  .notes-editor-content ol {
+    list-style: decimal;
+  }
+
+  .notes-editor-content blockquote {
+    border-left: 3px solid #f5a524;
+    color: #5b5349;
+    padding-left: 1rem;
+  }
+
+  .notes-editor-content code {
+    background: #f3faf4;
+    border-radius: 0.35rem;
+    color: #256f63;
+    font-size: 0.9em;
+    padding: 0.1rem 0.3rem;
+  }
+
+  .notes-editor-content pre {
+    background: #24201c;
+    border-radius: 0.5rem;
+    color: #fffffb;
+    overflow-x: auto;
+    padding: 0.9rem 1rem;
+  }
+
+  .notes-editor-content pre code {
+    background: transparent;
+    color: inherit;
+    padding: 0;
+  }
+
+  .notes-editor-content a {
+    color: #256f63;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .notes-editor-content ul[data-type="taskList"] {
+    list-style: none;
+    padding-left: 0;
+  }
+
+  .notes-editor-content li[data-type="taskItem"] {
+    align-items: flex-start;
+    display: flex;
+    gap: 0.55rem;
+  }
+
+  .notes-editor-content li[data-type="taskItem"] > label {
+    margin-top: 0.25rem;
+  }
+
+  .notes-editor-content li[data-type="taskItem"] > div {
+    min-width: 0;
+  }
+
+  .notes-editor-content li[data-type="taskItem"] input {
+    accent-color: #256f63;
+  }
+}
