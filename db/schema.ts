@@ -1,4 +1,5 @@
-import { integer, jsonb, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import type { JSONContent } from "@tiptap/core";
+import { boolean, integer, jsonb, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -100,6 +101,25 @@ export const kanbanBoardShares = pgTable(
   (table) => [uniqueIndex("kanban_board_shares_board_email_unique").on(table.boardId, table.email)]
 );
 
+export const notes = pgTable("notes", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
+  title: text("title").notNull(),
+  content: jsonb("content")
+    .$type<JSONContent>()
+    .notNull()
+    .default({ type: "doc", content: [{ type: "paragraph" }] }),
+  plainText: text("plain_text").notNull().default(""),
+  color: text("color").notNull(),
+  icon: text("icon").notNull().default("sticky-note"),
+  pinned: boolean("pinned").notNull().default(false),
+  trashedAt: timestamp("trashed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type CalendarItem = typeof calendarItems.$inferSelect;
@@ -112,3 +132,5 @@ export type KanbanTask = typeof kanbanTasks.$inferSelect;
 export type NewKanbanTask = typeof kanbanTasks.$inferInsert;
 export type KanbanBoardShare = typeof kanbanBoardShares.$inferSelect;
 export type NewKanbanBoardShare = typeof kanbanBoardShares.$inferInsert;
+export type Note = typeof notes.$inferSelect;
+export type NewNote = typeof notes.$inferInsert;
