@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import type { Editor } from "@tiptap/react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
@@ -25,6 +25,7 @@ import {
   List,
   ListOrdered,
   Loader2,
+  Mic,
   MoreHorizontal,
   Paintbrush,
   Pilcrow,
@@ -58,6 +59,7 @@ import {
   type RefineInstruction,
 } from "@/app/notes/actions";
 import { Button } from "@/components/ui/button";
+import { useAssemblyAIStreaming } from "@/hooks/use-assemblyai-streaming";
 import { cn } from "@/lib/utils";
 import { defaultNoteContent, noteColorOptions, type NoteContent, type NoteDTO } from "@/lib/notes";
 
@@ -218,15 +220,20 @@ export function NotesPage() {
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashIndex, setSlashIndex] = useState(0);
   const [refining, setRefining] = useState<RefineInstruction | null>(null);
+  const [recordingToast, setRecordingToast] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const skipEditorUpdateRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorRef = useRef<Editor | null>(null);
+  const transcriptPositionRef = useRef<number | null>(null);
+  const recordingNoteIdRef = useRef<number | null>(null);
+  const selectedNoteIdRef = useRef<number | null>(null);
 
   const selectedNote = useMemo(
     () => notes.find((note) => note.id === selectedNoteId) ?? notes[0] ?? null,
     [notes, selectedNoteId]
   );
+  selectedNoteIdRef.current = selectedNote?.id ?? null;
 
   const editor = useEditor(
     {
@@ -273,6 +280,49 @@ export function NotesPage() {
   );
   editorRef.current = editor;
 
+  const insertFinalTranscript = useCallback((text: string) => {
+    const activeEditor = editorRef.current;
+    const trimmedText = text.trim();
+
+    if (
+      !activeEditor ||
+      !trimmedText ||
+      recordingNoteIdRef.current === null ||
+      recordingNoteIdRef.current !== selectedNoteIdRef.current
+    ) {
+      return;
+    }
+
+    const maxPosition = activeEditor.state.doc.content.size;
+    const position = Math.min(transcriptPositionRef.current ?? maxPosition, maxPosition);
+    const previousCharacter =
+      position > 0 ? activeEditor.state.doc.textBetween(position - 1, position, "", "") : "";
+    const needsLeadingSpace = Boolean(previousCharacter && !/\s/.test(previousCharacter));
+    const insertion = `${needsLeadingSpace ? " " : ""}${trimmedText}`;
+
+    activeEditor.commands.insertContentAt(position, insertion);
+    transcriptPositionRef.current = position + insertion.length;
+  }, []);
+
+  const {
+    status: recordingStatus,
+    preview: transcriptionPreview,
+    elapsedSeconds,
+    error: recordingError,
+    isActive: recordingActive,
+    isRecording,
+    startRecording,
+    stopRecording,
+  } = useAssemblyAIStreaming({
+    onFinalTranscript: insertFinalTranscript,
+    maxDurationSeconds: 120,
+    onTimeLimit: () => {
+      recordingNoteIdRef.current = null;
+      transcriptPositionRef.current = null;
+      setRecordingToast("Recording stopped after the 2-minute limit. You can start another recording.");
+    },
+  });
+
   const filteredSlashCommands = useMemo(() => {
     const match = getSlashMatch(editorRef.current);
     if (!match?.query) {
@@ -310,6 +360,21 @@ export function NotesPage() {
       setSaveStatus("saved");
     });
   }, [selectedNote?.id, editor]);
+
+  useEffect(() => {
+    if (recordingError) {
+      setError(recordingError);
+    }
+  }, [recordingError]);
+
+  useEffect(() => {
+    if (!recordingToast) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setRecordingToast(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [recordingToast]);
 
   useEffect(() => {
     if (!selectedNote) {
@@ -359,7 +424,37 @@ export function NotesPage() {
     });
   }
 
-  function handleCreateNote() {
+  async function flushActiveNote(noteId: number) {
+    const activeEditor = editorRef.current;
+
+    if (!activeEditor || selectedNoteIdRef.current !== noteId) {
+      return;
+    }
+
+    try {
+      const updated = await updateNote(noteId, {
+        title: titleDraft,
+        content: activeEditor.getJSON() as NoteContent,
+        plainText: activeEditor.getText(),
+      });
+      setNotes((current) => current.map((note) => (note.id === updated.id ? updated : note)));
+      setSaveStatus("saved");
+    } catch (nextError) {
+      setSaveStatus("error");
+      setError(getFriendlyErrorMessage(nextError, "Unable to save note."));
+    }
+  }
+
+  async function handleCreateNote() {
+    const activeNoteId = selectedNoteIdRef.current;
+    recordingNoteIdRef.current = null;
+    transcriptPositionRef.current = null;
+    await stopRecording();
+
+    if (activeNoteId) {
+      await flushActiveNote(activeNoteId);
+    }
+
     startTransition(async () => {
       try {
         setError(null);
@@ -398,7 +493,13 @@ export function NotesPage() {
     });
   }
 
-  function handleTrash(noteId: number) {
+  async function handleTrash(noteId: number) {
+    if (recordingNoteIdRef.current === noteId) {
+      recordingNoteIdRef.current = null;
+      transcriptPositionRef.current = null;
+      await stopRecording();
+      await flushActiveNote(noteId);
+    }
     setActionMenuNoteId(null);
     startTransition(async () => {
       try {
@@ -495,6 +596,38 @@ export function NotesPage() {
     setSlashOpen(false);
   }
 
+  async function handleStartRecording() {
+    if (!editor || !selectedNote) {
+      return;
+    }
+
+    const hasEditorFocus = editor.view.hasFocus();
+    transcriptPositionRef.current = hasEditorFocus
+      ? editor.state.selection.to
+      : editor.state.doc.content.size;
+    recordingNoteIdRef.current = selectedNote.id;
+    setRecordingToast(null);
+    await startRecording();
+  }
+
+  async function handleStopRecording() {
+    recordingNoteIdRef.current = null;
+    transcriptPositionRef.current = null;
+    await stopRecording();
+  }
+
+  async function handleSelectNote(noteId: number) {
+    if (selectedNote?.id !== noteId && recordingActive) {
+      const activeNoteId = selectedNote.id;
+      recordingNoteIdRef.current = null;
+      transcriptPositionRef.current = null;
+      await stopRecording();
+      await flushActiveNote(activeNoteId);
+    }
+
+    setSelectedNoteId(noteId);
+  }
+
   const wordCount = getWordCount(plainTextDraft);
   const shouldShowSignInAction = error?.includes("signed in");
 
@@ -556,7 +689,7 @@ export function NotesPage() {
                 note={note}
                 selected={selectedNote?.id === note.id}
                 menuOpen={actionMenuNoteId === note.id}
-                onSelect={() => setSelectedNoteId(note.id)}
+                onSelect={() => handleSelectNote(note.id)}
                 onRename={(title) => patchNote(note.id, { title })}
                 onPin={() => patchNote(note.id, { pinned: !note.pinned })}
                 onColor={(color) => patchNote(note.id, { color })}
@@ -674,7 +807,17 @@ export function NotesPage() {
               </div>
             </div>
 
-            <EditorToolbar editor={editor} onLink={insertLink} />
+            <EditorToolbar
+              editor={editor}
+              onLink={insertLink}
+              recordingStatus={recordingStatus}
+              recordingActive={recordingActive}
+              isRecording={isRecording}
+              elapsedSeconds={elapsedSeconds}
+              preview={transcriptionPreview}
+              onStartRecording={handleStartRecording}
+              onStopRecording={handleStopRecording}
+            />
 
             <div className="relative min-h-0 flex-1 overflow-y-auto bg-[#fffffb]">
               {editor ? (
@@ -768,6 +911,15 @@ export function NotesPage() {
           </div>
         )}
       </main>
+      {recordingToast ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-5 right-5 z-50 max-w-sm rounded-lg border border-[#b9d8c0] bg-[#fffffb] px-4 py-3 text-sm font-medium text-[#34302a] shadow-xl"
+        >
+          {recordingToast}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -925,7 +1077,27 @@ function NoteListItem({
   );
 }
 
-function EditorToolbar({ editor, onLink }: { editor: Editor | null; onLink: () => void }) {
+function EditorToolbar({
+  editor,
+  onLink,
+  recordingStatus,
+  recordingActive,
+  isRecording,
+  elapsedSeconds,
+  preview,
+  onStartRecording,
+  onStopRecording,
+}: {
+  editor: Editor | null;
+  onLink: () => void;
+  recordingStatus: string;
+  recordingActive: boolean;
+  isRecording: boolean;
+  elapsedSeconds: number;
+  preview: string;
+  onStartRecording: () => void;
+  onStopRecording: () => void;
+}) {
   const controls = [
     { label: "Paragraph", icon: AlignLeft, active: editor?.isActive("paragraph"), action: () => editor?.chain().focus().setParagraph().run() },
     { label: "Heading 1", icon: Heading1, active: editor?.isActive("heading", { level: 1 }), action: () => editor?.chain().focus().toggleHeading({ level: 1 }).run() },
@@ -996,9 +1168,57 @@ function EditorToolbar({ editor, onLink }: { editor: Editor | null; onLink: () =
       >
         <Redo2 className="size-4" aria-hidden="true" />
       </button>
-      <div className="ml-auto hidden items-center gap-1 rounded-lg bg-white px-2 py-1 text-xs font-semibold text-[#7c756a] sm:flex">
-        <Paintbrush className="size-3.5 text-[#f5a524]" aria-hidden="true" />
-        Block editor
+      <div className="ml-auto flex min-w-0 items-center gap-2">
+        {recordingActive ? (
+          <div
+            aria-live="polite"
+            className="hidden max-w-64 truncate rounded-lg bg-white px-2 py-1 text-xs font-medium text-[#7c756a] md:block"
+          >
+            {preview ||
+              (recordingStatus === "permission"
+                ? "Waiting for microphone permission..."
+                : recordingStatus === "connecting"
+                  ? "Connecting..."
+                  : "Listening...")}
+          </div>
+        ) : (
+          <div className="hidden items-center gap-1 rounded-lg bg-white px-2 py-1 text-xs font-semibold text-[#7c756a] sm:flex">
+            <Paintbrush className="size-3.5 text-[#f5a524]" aria-hidden="true" />
+            Block editor
+          </div>
+        )}
+        <Button
+          type="button"
+          size="sm"
+          onClick={recordingActive ? onStopRecording : onStartRecording}
+          disabled={!editor || recordingStatus === "stopping"}
+          className={cn(
+            "h-9 rounded-lg px-3",
+            recordingActive
+              ? "bg-[#fff0ec] text-[#a3462e] hover:bg-[#ffe2d8]"
+              : "bg-[#256f63] text-white hover:bg-[#1f5f55]"
+          )}
+        >
+          {recordingActive ? (
+            <>
+              <span className="relative mr-2 grid size-4 place-items-center">
+                {isRecording ? (
+                  <span className="absolute size-4 animate-ping rounded-full bg-[#ff6b4a]/35" />
+                ) : null}
+                <Mic className="relative size-4" aria-hidden="true" />
+              </span>
+              Stop Recording
+              <span className="ml-2 tabular-nums text-[11px]">
+                {Math.floor(elapsedSeconds / 60)}:{String(elapsedSeconds % 60).padStart(2, "0")}
+              </span>
+            </>
+          ) : (
+            <>
+              <Mic className="mr-2 size-4" aria-hidden="true" />
+              Speak to Note
+            </>
+          )}
+        </Button>
       </div>
     </div>
   );
