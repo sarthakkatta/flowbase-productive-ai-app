@@ -39,7 +39,7 @@ const navigationGroups = [
     label: "Create",
     items: [
       { label: "Notes", href: "/notes", icon: StickyNote, color: "text-[#f5a524]" },
-      { label: "Whiteboard", href: "#", icon: Palette, color: "text-[#f04f78]" },
+      { label: "Whiteboard", href: "/whiteboard", icon: Palette, color: "text-[#f04f78]" },
       { label: "Pages / Spaces", href: "#", icon: FileText, color: "text-[#3f6df6]" },
       { label: "AI Template Builder", href: "#", icon: WandSparkles, color: "text-[#bd3ff6]" },
     ],

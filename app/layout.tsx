@@ -1,5 +1,6 @@
 import { ClerkProvider } from '@clerk/nextjs';
 import "@liveblocks/react-ui/styles.css";
+import "@excalidraw/excalidraw/index.css";
 import "./globals.css";
 import type { Metadata } from "next";
 import { AppLiveblocksProvider } from "@/components/liveblocks-provider";
