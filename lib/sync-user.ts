@@ -1,13 +1,19 @@
 import { currentUser } from "@clerk/nextjs/server";
 import { and, eq } from "drizzle-orm";
 
-import { db, kanbanBoardShares, users } from "@/db";
+import { db, kanbanBoardShares, spaceShares, users } from "@/db";
 
 async function activatePendingSharesForUser(userId: number, email: string) {
-  await db
-    .update(kanbanBoardShares)
-    .set({ userId, status: "active", updatedAt: new Date() })
-    .where(and(eq(kanbanBoardShares.email, email.toLowerCase()), eq(kanbanBoardShares.status, "pending")));
+  await Promise.all([
+    db
+      .update(kanbanBoardShares)
+      .set({ userId, status: "active", updatedAt: new Date() })
+      .where(and(eq(kanbanBoardShares.email, email.toLowerCase()), eq(kanbanBoardShares.status, "pending"))),
+    db
+      .update(spaceShares)
+      .set({ userId, status: "active", updatedAt: new Date() })
+      .where(and(eq(spaceShares.email, email.toLowerCase()), eq(spaceShares.status, "pending"))),
+  ]);
 }
 
 export async function syncCurrentUserToDatabase() {

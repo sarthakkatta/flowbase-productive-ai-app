@@ -40,7 +40,7 @@ const navigationGroups = [
     items: [
       { label: "Notes", href: "/notes", icon: StickyNote, color: "text-[#f5a524]" },
       { label: "Whiteboard", href: "/whiteboard", icon: Palette, color: "text-[#f04f78]" },
-      { label: "Pages / Spaces", href: "#", icon: FileText, color: "text-[#3f6df6]" },
+      { label: "Pages / Spaces", href: "/spaces", icon: FileText, color: "text-[#7c5cff]" },
       { label: "AI Template Builder", href: "#", icon: WandSparkles, color: "text-[#bd3ff6]" },
     ],
   },
@@ -55,9 +55,10 @@ type AppShellProps = {
   eyebrow: string;
   title: string;
   searchPlaceholder?: string;
+  showSearch?: boolean;
 };
 
-export function AppShell({ children, eyebrow, title, searchPlaceholder = "Search notes, boards, spaces" }: AppShellProps) {
+export function AppShell({ children, eyebrow, title, searchPlaceholder = "Search notes, boards, spaces", showSearch = true }: AppShellProps) {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
   const { isSignedIn } = useAuth();
@@ -158,14 +159,16 @@ export function AppShell({ children, eyebrow, title, searchPlaceholder = "Search
               <p className="text-sm font-medium text-[#7c756a]">{eyebrow}</p>
               <h1 className="mt-1 text-2xl font-semibold text-[#24201c]">{title}</h1>
             </div>
-            <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-[#e7e1d6] bg-white px-3 py-2 shadow-sm sm:min-w-[280px] sm:max-w-md">
-              <Search className="size-4 shrink-0 text-[#ff6b4a]" aria-hidden="true" />
-              <input
-                className="w-full bg-transparent text-sm text-[#34302a] outline-none placeholder:text-[#9a9287]"
-                placeholder={searchPlaceholder}
-                type="search"
-              />
-            </div>
+            {showSearch ? (
+              <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-[#e7e1d6] bg-white px-3 py-2 shadow-sm sm:min-w-[280px] sm:max-w-md">
+                <Search className="size-4 shrink-0 text-[#ff6b4a]" aria-hidden="true" />
+                <input
+                  className="w-full bg-transparent text-sm text-[#34302a] outline-none placeholder:text-[#9a9287]"
+                  placeholder={searchPlaceholder}
+                  type="search"
+                />
+              </div>
+            ) : <div className="flex-1" />}
             {isSignedIn ? (
               <UserButton />
             ) : (
