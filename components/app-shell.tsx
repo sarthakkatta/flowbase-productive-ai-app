@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { SignInButton, UserButton, useAuth } from "@clerk/nextjs";
 import {
@@ -17,12 +17,15 @@ import {
   PanelLeft,
   Search,
   Settings,
-  Sparkles,
   StickyNote,
   WandSparkles,
+  X,
 } from "lucide-react";
 
+import { listSidebarGeneratedApps, removeGeneratedAppFromSidebar } from "@/app/ai-template-builder/actions";
+import { GeneratedAppIconView } from "@/components/generated-app-icon";
 import { Button } from "@/components/ui/button";
+import type { SidebarGeneratedAppDTO } from "@/lib/generated-apps";
 import { cn } from "@/lib/utils";
 
 const navigationGroups = [
@@ -41,7 +44,7 @@ const navigationGroups = [
       { label: "Notes", href: "/notes", icon: StickyNote, color: "text-[#f5a524]" },
       { label: "Whiteboard", href: "/whiteboard", icon: Palette, color: "text-[#f04f78]" },
       { label: "Pages / Spaces", href: "/spaces", icon: FileText, color: "text-[#7c5cff]" },
-      { label: "AI Template Builder", href: "#", icon: WandSparkles, color: "text-[#bd3ff6]" },
+      { label: "AI Template Builder", href: "/ai-template-builder", icon: WandSparkles, color: "text-[#bd3ff6]" },
     ],
   },
   {
@@ -60,8 +63,32 @@ type AppShellProps = {
 
 export function AppShell({ children, eyebrow, title, searchPlaceholder = "Search notes, boards, spaces", showSearch = true }: AppShellProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [generatedApps, setGeneratedApps] = useState<SidebarGeneratedAppDTO[]>([]);
   const pathname = usePathname();
   const { isSignedIn } = useAuth();
+
+  const refreshGeneratedApps = useCallback(() => {
+    if (!isSignedIn) {
+      setGeneratedApps([]);
+      return;
+    }
+    listSidebarGeneratedApps().then(setGeneratedApps).catch(() => setGeneratedApps([]));
+  }, [isSignedIn]);
+
+  useEffect(() => {
+    refreshGeneratedApps();
+    window.addEventListener("generated-apps-changed", refreshGeneratedApps);
+    return () => window.removeEventListener("generated-apps-changed", refreshGeneratedApps);
+  }, [refreshGeneratedApps]);
+
+  function unpinGeneratedApp(id: number) {
+    removeGeneratedAppFromSidebar(id)
+      .then(() => {
+        refreshGeneratedApps();
+        window.dispatchEvent(new Event("generated-apps-changed"));
+      })
+      .catch(() => undefined);
+  }
 
   return (
     <div className="min-h-screen bg-[#f8f7f2] text-[#24201c]">
@@ -82,9 +109,9 @@ export function AppShell({ children, eyebrow, title, searchPlaceholder = "Search
             </div>
           </div>
 
-          <nav className="flex-1 space-y-5 overflow-y-auto px-2.5 py-4" aria-label="Main navigation">
+          <nav className="min-h-0 flex-1 space-y-2 overflow-hidden px-2.5 py-2" aria-label="Main navigation">
             {navigationGroups.map((group) => (
-              <div key={group.label} className="space-y-1.5">
+              <div key={group.label} className="space-y-1">
                 <p
                   className={cn(
                     "px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9a9287] transition-opacity",
@@ -104,7 +131,7 @@ export function AppShell({ children, eyebrow, title, searchPlaceholder = "Search
                         href={item.href}
                         title={collapsed ? item.label : undefined}
                         className={cn(
-                          "group flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-xs font-medium text-[#5b5349] transition-colors hover:bg-[#eef8ef] hover:text-[#24201c]",
+                          "group flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-xs font-medium text-[#5b5349] transition-colors hover:bg-[#eef8ef] hover:text-[#24201c]",
                           active &&
                             "bg-[#e6f6e9] text-[#24201c] shadow-[inset_0_0_0_1px_rgba(37,111,99,0.12)]",
                           collapsed && "justify-center px-0"
@@ -120,16 +147,51 @@ export function AppShell({ children, eyebrow, title, searchPlaceholder = "Search
                 </div>
               </div>
             ))}
+            {generatedApps.length ? (
+              <div className="space-y-1.5">
+                <p className={cn(
+                  "px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9a9287] transition-opacity",
+                  collapsed && "h-px overflow-hidden px-0 opacity-0"
+                )}>My apps</p>
+                <div className="space-y-1">
+                  {generatedApps.map((app) => {
+                    const href = `/ai-template-builder/${app.id}`;
+                    const active = pathname === href;
+                    return (
+                      <div key={app.id} className="group/nav relative">
+                        <a
+                          href={href}
+                          title={collapsed ? app.appName : undefined}
+                          className={cn(
+                            "flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-xs font-medium text-[#5b5349] transition-colors hover:bg-[#eef8ef] hover:text-[#24201c]",
+                            active && "bg-[#e6f6e9] text-[#24201c] shadow-[inset_0_0_0_1px_rgba(37,111,99,0.12)]",
+                            collapsed && "justify-center px-0"
+                          )}
+                        >
+                          <GeneratedAppIconView name={app.icon} className="size-4 shrink-0" style={{ color: app.color }} />
+                          <span className={cn("truncate pr-5 transition-[opacity,width]", collapsed && "w-0 pr-0 opacity-0")}>{app.appName}</span>
+                          <span className={cn("absolute left-1.5 size-1.5 rounded-full", collapsed ? "bottom-1" : "left-auto right-8")} style={{ backgroundColor: app.color }} />
+                        </a>
+                        {!collapsed ? (
+                          <button
+                            type="button"
+                            title="Remove from sidebar"
+                            aria-label={`Remove ${app.appName} from sidebar`}
+                            onClick={() => unpinGeneratedApp(app.id)}
+                            className="absolute right-1.5 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-md text-[#aaa195] opacity-0 hover:bg-white hover:text-red-500 group-hover/nav:opacity-100"
+                          >
+                            <X className="size-3.5" />
+                          </button>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
           </nav>
 
-          <div className="border-t border-[#e7e1d6] p-2.5 pb-16">
-            <div className={cn("mb-2 rounded-lg bg-[#ecf8ee] p-2.5 transition-opacity", collapsed && "hidden")}>
-              <div className="flex items-center gap-2">
-                <Sparkles className="size-4 text-[#ff8a3d]" aria-hidden="true" />
-                <p className="text-xs font-semibold">Daily flow</p>
-              </div>
-              <p className="mt-1 text-[11px] leading-5 text-[#6f786d]">5 tasks, 2 notes, 1 whiteboard waiting.</p>
-            </div>
+          <div className="shrink-0 border-t border-[#e7e1d6] p-2.5">
             <Button
               type="button"
               variant="ghost"

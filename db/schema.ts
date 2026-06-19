@@ -261,6 +261,30 @@ export const workspaceOnboarding = pgTable("workspace_onboarding", {
   spacesSeededAt: timestamp("spaces_seeded_at").defaultNow().notNull(),
 });
 
+export const generatedApps = pgTable(
+  "generated_apps",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    prompt: text("prompt").notNull(),
+    appName: text("app_name").notNull(),
+    description: text("description").notNull(),
+    icon: text("icon").notNull(),
+    color: text("color").notNull(),
+    definition: jsonb("definition").$type<Record<string, unknown>>().notNull(),
+    runtimeData: jsonb("runtime_data").$type<Record<string, unknown>>().notNull(),
+    sidebarPosition: integer("sidebar_position"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("generated_apps_user_id_idx").on(table.userId),
+    uniqueIndex("generated_apps_user_sidebar_unique").on(table.userId, table.sidebarPosition),
+  ]
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type CalendarItem = typeof calendarItems.$inferSelect;
@@ -285,3 +309,5 @@ export type SpaceShare = typeof spaceShares.$inferSelect;
 export type SpaceUserState = typeof spaceUserStates.$inferSelect;
 export type PageUserState = typeof pageUserStates.$inferSelect;
 export type PageLink = typeof pageLinks.$inferSelect;
+export type GeneratedApp = typeof generatedApps.$inferSelect;
+export type NewGeneratedApp = typeof generatedApps.$inferInsert;
