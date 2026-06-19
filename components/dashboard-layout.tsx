@@ -5,6 +5,7 @@ import {
   Sparkles,
   WandSparkles,
 } from "lucide-react";
+import Link from "next/link";
 
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -93,8 +94,8 @@ export function DashboardLayout() {
             <p className="mt-3 text-sm leading-6 text-[#665f55]">
               Turn rough notes into reusable spaces, boards, and planning systems.
             </p>
-            <Button variant="outline" className="mt-5 w-full rounded-lg border-[#e7e1d6] bg-[#fffffb]">
-              Create template
+            <Button asChild variant="outline" className="mt-5 w-full rounded-lg border-[#e7e1d6] bg-[#fffffb]">
+              <Link href="/ai-template-builder">Create template</Link>
             </Button>
           </div>
 
