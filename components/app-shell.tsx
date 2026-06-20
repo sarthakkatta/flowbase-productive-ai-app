@@ -33,7 +33,7 @@ const navigationGroups = [
     label: "Workspace",
     items: [
       { label: "Dashboard", href: "/", icon: LayoutDashboard, color: "text-[#ff6b4a]" },
-      { label: "AI Assistant", href: "#", icon: Bot, color: "text-[#7c5cff]" },
+      { label: "AI Assistant", href: "/ai-assistant", icon: Bot, color: "text-[#7c5cff]" },
       { label: "Calendar", href: "/calendar", icon: CalendarDays, color: "text-[#00a7e1]" },
       { label: "Task / Kanban", href: "/kanban", icon: CheckSquare, color: "text-[#00b894]" },
     ],
