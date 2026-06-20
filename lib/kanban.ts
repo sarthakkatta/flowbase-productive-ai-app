@@ -15,6 +15,9 @@ export type KanbanTaskDTO = {
   dueDate: string;
   priority: KanbanPriority;
   labels: KanbanLabel[];
+  categoryName: string | null;
+  categoryColor: string | null;
+  categoryIcon: string | null;
   syncToCalendar: boolean;
   linkToNotes: boolean;
   position: number;
@@ -63,6 +66,9 @@ export type KanbanTaskInput = {
   dueDate: string;
   priority: KanbanPriority;
   labels: KanbanLabel[];
+  categoryName?: string | null;
+  categoryColor?: string | null;
+  categoryIcon?: string | null;
   syncToCalendar: boolean;
   linkToNotes: boolean;
 };

@@ -9,6 +9,9 @@ export type NoteDTO = {
   plainText: string;
   color: string;
   icon: string;
+  categoryName: string | null;
+  categoryColor: string | null;
+  categoryIcon: string | null;
   pinned: boolean;
   trashedAt: string | null;
   createdAt: string;
@@ -21,6 +24,9 @@ export type NoteUpdateInput = {
   plainText?: string;
   color?: string;
   icon?: string;
+  categoryName?: string | null;
+  categoryColor?: string | null;
+  categoryIcon?: string | null;
   pinned?: boolean;
 };
 

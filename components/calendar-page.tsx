@@ -21,6 +21,7 @@ import {
   moveCalendarItem,
   updateCalendarItem,
 } from "@/app/calendar/actions";
+import { listUserCategories } from "@/app/settings/actions";
 import { Button } from "@/components/ui/button";
 import {
   calendarCategories,
@@ -29,6 +30,7 @@ import {
   type CalendarItemKind,
 } from "@/lib/calendar";
 import { cn } from "@/lib/utils";
+import type { SettingsCategoryDTO } from "@/lib/settings";
 
 type CalendarView = "month" | "week";
 type DialogState = {
@@ -153,6 +155,7 @@ export function CalendarPage() {
   const [view, setView] = useState<CalendarView>("month");
   const [anchorDate, setAnchorDate] = useState(() => new Date());
   const [items, setItems] = useState<CalendarItemDTO[]>([]);
+  const [savedCategories, setSavedCategories] = useState<SettingsCategoryDTO[]>([]);
   const [dialog, setDialog] = useState<DialogState>({
     open: false,
     mode: "create",
@@ -170,13 +173,32 @@ export function CalendarPage() {
   );
   const range = useMemo(() => getRangeForView(view, anchorDate), [anchorDate, view]);
   const monthIndex = anchorDate.getMonth();
+  const availableCategories = useMemo(() => {
+    const scope = form.kind === "reminder" ? "reminder" : "calendar";
+    const scoped = savedCategories
+      .filter((category) => category.scope === scope)
+      .map((category) => ({ label: category.name, color: category.color }));
+    const legacy = calendarCategories.filter(
+      (category) => !scoped.some((saved) => saved.label.toLowerCase() === category.label.toLowerCase())
+    );
+    const options = [...scoped, ...legacy];
+    if (form.category && !options.some((category) => category.label === form.category)) {
+      options.unshift({ label: form.category, color: form.categoryColor });
+    }
+    return options;
+  }, [form.kind, form.category, form.categoryColor, savedCategories]);
 
   useEffect(() => {
     startTransition(async () => {
       try {
         setError(null);
-        const nextItems = await listCalendarItems(range);
+        const [nextItems, calendar, reminders] = await Promise.all([
+          listCalendarItems(range),
+          listUserCategories("calendar"),
+          listUserCategories("reminder"),
+        ]);
         setItems(nextItems);
+        setSavedCategories([...calendar, ...reminders]);
       } catch (nextError) {
         setError(getFriendlyErrorMessage(nextError, "Unable to load calendar items."));
       }
@@ -197,7 +219,11 @@ export function CalendarPage() {
 
   function openDialog(selectedDate: string | null) {
     setDialog({ open: true, mode: "create", selectedDate, selectedItemId: null });
-    setForm(defaultFormValues(selectedDate));
+    const firstCategory = savedCategories.find((category) => category.scope === "calendar");
+    setForm({
+      ...defaultFormValues(selectedDate),
+      ...(firstCategory ? { category: firstCategory.name, categoryColor: firstCategory.color } : {}),
+    });
   }
 
   function openEditDialog(item: CalendarItemDTO) {
@@ -215,7 +241,8 @@ export function CalendarPage() {
   }
 
   function updateCategory(label: string) {
-    const category = calendarCategories.find((item) => item.label === label) ?? calendarCategories[0];
+    const category = availableCategories.find((item) => item.label === label) ?? availableCategories[0];
+    if (!category) return;
     setForm((current) => ({
       ...current,
       category: category.label,
@@ -483,9 +510,16 @@ export function CalendarPage() {
                   <span className="text-xs font-semibold text-[#665f55]">Type</span>
                   <select
                     value={form.kind}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, kind: event.target.value as CalendarItemKind }))
-                    }
+                    onChange={(event) => {
+                      const kind = event.target.value as CalendarItemKind;
+                      const scope = kind === "reminder" ? "reminder" : "calendar";
+                      const firstCategory = savedCategories.find((category) => category.scope === scope);
+                      setForm((current) => ({
+                        ...current,
+                        kind,
+                        ...(firstCategory ? { category: firstCategory.name, categoryColor: firstCategory.color } : {}),
+                      }));
+                    }}
                     className="h-10 w-full rounded-lg border border-[#e7e1d6] bg-white px-3 text-sm outline-none focus:border-[#256f63]"
                   >
                     <option value="task">Task</option>
@@ -499,7 +533,7 @@ export function CalendarPage() {
                     onChange={(event) => updateCategory(event.target.value)}
                     className="h-10 w-full rounded-lg border border-[#e7e1d6] bg-white px-3 text-sm outline-none focus:border-[#256f63]"
                   >
-                    {calendarCategories.map((category) => (
+                    {availableCategories.map((category) => (
                       <option key={category.label} value={category.label}>
                         {category.label}
                       </option>
@@ -540,7 +574,7 @@ export function CalendarPage() {
               </label>
 
               <div className="flex flex-wrap items-center gap-2">
-                {calendarCategories.map((category) => (
+                {availableCategories.map((category) => (
                   <span
                     key={category.label}
                     className={cn(

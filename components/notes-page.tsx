@@ -58,10 +58,12 @@ import {
   updateNote,
   type RefineInstruction,
 } from "@/app/notes/actions";
+import { listUserCategories } from "@/app/settings/actions";
 import { Button } from "@/components/ui/button";
 import { useAssemblyAIStreaming } from "@/hooks/use-assemblyai-streaming";
 import { cn } from "@/lib/utils";
 import { defaultNoteContent, noteColorOptions, type NoteContent, type NoteDTO } from "@/lib/notes";
+import type { SettingsCategoryDTO } from "@/lib/settings";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 type SlashCommand = {
@@ -207,6 +209,7 @@ function getSlashMatch(editor: Editor | null) {
 
 export function NotesPage() {
   const [notes, setNotes] = useState<NoteDTO[]>([]);
+  const [noteCategories, setNoteCategories] = useState<SettingsCategoryDTO[]>([]);
   const [trashedNotes, setTrashedNotes] = useState<NoteDTO[]>([]);
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
@@ -335,9 +338,14 @@ export function NotesPage() {
     startTransition(async () => {
       try {
         setError(null);
-        const [nextNotes, nextTrashedNotes] = await Promise.all([listNotes(search), listTrashedNotes()]);
+        const [nextNotes, nextTrashedNotes, categories] = await Promise.all([
+          listNotes(search),
+          listTrashedNotes(),
+          listUserCategories("note"),
+        ]);
         setNotes(nextNotes);
         setTrashedNotes(nextTrashedNotes);
+        setNoteCategories(categories);
         setSelectedNoteId((current) => current ?? nextNotes[0]?.id ?? null);
       } catch (nextError) {
         setError(getFriendlyErrorMessage(nextError, "Unable to load notes."));
@@ -693,9 +701,17 @@ export function NotesPage() {
                 onRename={(title) => patchNote(note.id, { title })}
                 onPin={() => patchNote(note.id, { pinned: !note.pinned })}
                 onColor={(color) => patchNote(note.id, { color })}
+                onCategory={(category) =>
+                  patchNote(note.id, {
+                    categoryName: category?.name ?? null,
+                    categoryColor: category?.color ?? null,
+                    categoryIcon: category?.icon ?? null,
+                  })
+                }
                 onDuplicate={() => handleDuplicate(note.id)}
                 onTrash={() => handleTrash(note.id)}
                 onToggleMenu={() => setActionMenuNoteId((current) => (current === note.id ? null : note.id))}
+                categories={noteCategories}
               />
             ))
           ) : (
@@ -804,6 +820,29 @@ export function NotesPage() {
                     </button>
                   ))}
                 </div>
+                <label className="min-w-[170px] space-y-1">
+                  <span className="sr-only">Note category</span>
+                  <select
+                    value={selectedNote.categoryName ?? ""}
+                    onChange={(event) => {
+                      const category = noteCategories.find((item) => item.name === event.target.value);
+                      patchNote(selectedNote.id, {
+                        categoryName: category?.name ?? null,
+                        categoryColor: category?.color ?? null,
+                        categoryIcon: category?.icon ?? null,
+                      });
+                    }}
+                    className="h-9 w-full rounded-lg border border-[#e7e1d6] bg-white px-3 text-xs font-semibold text-[#665f55] outline-none focus:border-[#256f63]"
+                  >
+                    <option value="">No category</option>
+                    {selectedNote.categoryName && !noteCategories.some((category) => category.name === selectedNote.categoryName) ? (
+                      <option value={selectedNote.categoryName}>{selectedNote.categoryName}</option>
+                    ) : null}
+                    {noteCategories.map((category) => (
+                      <option key={category.id} value={category.name}>{category.name}</option>
+                    ))}
+                  </select>
+                </label>
               </div>
             </div>
 
@@ -932,9 +971,11 @@ function NoteListItem({
   onRename,
   onPin,
   onColor,
+  onCategory,
   onDuplicate,
   onTrash,
   onToggleMenu,
+  categories,
 }: {
   note: NoteDTO;
   selected: boolean;
@@ -943,9 +984,11 @@ function NoteListItem({
   onRename: (title: string) => void;
   onPin: () => void;
   onColor: (color: string) => void;
+  onCategory: (category: SettingsCategoryDTO | null) => void;
   onDuplicate: () => void;
   onTrash: () => void;
   onToggleMenu: () => void;
+  categories: SettingsCategoryDTO[];
 }) {
   const [renaming, setRenaming] = useState(false);
   const [title, setTitle] = useState(note.title);
@@ -995,8 +1038,8 @@ function NoteListItem({
               {formatUpdatedTime(note.updatedAt)}
             </span>
             <span className="inline-flex max-w-[120px] items-center gap-1 rounded-md bg-white/75 px-1.5 py-0.5">
-              <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: note.color }} />
-              <span className="truncate">Note</span>
+              <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: note.categoryColor ?? note.color }} />
+              <span className="truncate">{note.categoryName ?? "Note"}</span>
             </span>
           </span>
         </span>
@@ -1063,6 +1106,23 @@ function NoteListItem({
               </button>
             ))}
           </div>
+          <div className="px-2 pb-1 text-xs font-semibold text-[#7c756a]">Category</div>
+          <select
+            value={note.categoryName ?? ""}
+            onChange={(event) => {
+              const category = categories.find((item) => item.name === event.target.value);
+              onCategory(category ?? null);
+            }}
+            className="mx-2 mb-2 h-9 w-[calc(100%-1rem)] rounded-md border border-[#e7e1d6] bg-white px-2 text-xs font-semibold text-[#665f55] outline-none focus:border-[#256f63]"
+          >
+            <option value="">No category</option>
+            {note.categoryName && !categories.some((category) => category.name === note.categoryName) ? (
+              <option value={note.categoryName}>{note.categoryName}</option>
+            ) : null}
+            {categories.map((category) => (
+              <option key={category.id} value={category.name}>{category.name}</option>
+            ))}
+          </select>
           <button
             type="button"
             onClick={onTrash}

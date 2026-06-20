@@ -5,6 +5,8 @@ import { GoogleGenAI } from "@google/genai";
 import { and, desc, eq } from "drizzle-orm";
 
 import { db, users, whiteboards } from "@/db";
+import { planLimits } from "@/lib/plans";
+import { assertWithinLimit, getCurrentSubscription } from "@/lib/subscription";
 import {
   emptyWhiteboardScene,
   type DiagramNode,
@@ -15,6 +17,7 @@ import {
   whiteboardColors,
 } from "@/lib/whiteboard";
 import { syncCurrentUserToDatabase } from "@/lib/sync-user";
+import { consumeAiAction } from "@/lib/usage";
 
 async function getCurrentDatabaseUserId() {
   const { userId: clerkUserId } = await auth();
@@ -75,6 +78,16 @@ export async function listWhiteboards(): Promise<WhiteboardDTO[]> {
 
 export async function createWhiteboard(input?: { name?: string; color?: string }): Promise<WhiteboardDTO> {
   const userId = await getCurrentDatabaseUserId();
+  const [subscription, existing] = await Promise.all([
+    getCurrentSubscription(),
+    db.query.whiteboards.findMany({ where: eq(whiteboards.userId, userId), columns: { id: true } }),
+  ]);
+  assertWithinLimit({
+    isPro: subscription.isPro,
+    current: existing.length,
+    limit: planLimits.free.whiteboards,
+    label: "2 whiteboards",
+  });
   const now = new Date();
   const [created] = await db
     .insert(whiteboards)
@@ -222,7 +235,7 @@ export async function generateWhiteboardDiagram(input: {
   prompt: string;
   type: DiagramType;
 }): Promise<GeneratedDiagram> {
-  await getCurrentDatabaseUserId();
+  const userId = await getCurrentDatabaseUserId();
   const prompt = input.prompt.trim().slice(0, 1200);
   const validTypes: DiagramType[] = ["flowchart", "mind-map", "architecture", "user-journey", "process"];
   if (!prompt) throw new Error("Describe the diagram you want to create.");
@@ -233,6 +246,7 @@ export async function generateWhiteboardDiagram(input: {
   if (!apiKey) throw new Error("Gemini is not configured. Add GEMINI_API_KEY to enable AI diagrams.");
 
   try {
+    await consumeAiAction(userId);
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model,

@@ -49,7 +49,7 @@ const navigationGroups = [
   },
   {
     label: "System",
-    items: [{ label: "Settings", href: "#", icon: Settings, color: "text-[#64748b]" }],
+    items: [{ label: "Settings", href: "/settings", icon: Settings, color: "text-[#64748b]" }],
   },
 ];
 
@@ -59,9 +59,10 @@ type AppShellProps = {
   title: string;
   searchPlaceholder?: string;
   showSearch?: boolean;
+  activePage?: "settings";
 };
 
-export function AppShell({ children, eyebrow, title, searchPlaceholder = "Search notes, boards, spaces", showSearch = true }: AppShellProps) {
+export function AppShell({ children, eyebrow, title, searchPlaceholder = "Search notes, boards, spaces", showSearch = true, activePage }: AppShellProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [generatedApps, setGeneratedApps] = useState<SidebarGeneratedAppDTO[]>([]);
   const pathname = usePathname();
@@ -123,7 +124,12 @@ export function AppShell({ children, eyebrow, title, searchPlaceholder = "Search
                 <div className="space-y-1">
                   {group.items.map((item) => {
                     const Icon = item.icon;
-                    const active = item.href === "/" ? pathname === "/" : item.href !== "#" && pathname.startsWith(item.href);
+                    const active =
+                      activePage === "settings" && item.href === "/settings"
+                        ? true
+                        : item.href === "/"
+                          ? pathname === "/"
+                          : item.href !== "#" && pathname.startsWith(item.href);
 
                     return (
                       <a

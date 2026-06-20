@@ -15,6 +15,7 @@ import {
   type SidebarGeneratedAppDTO,
 } from "@/lib/generated-apps";
 import { syncCurrentUserToDatabase } from "@/lib/sync-user";
+import { getCurrentSubscription } from "@/lib/subscription";
 
 async function getCurrentDatabaseUserId() {
   const { userId: clerkUserId } = await auth();
@@ -91,6 +92,10 @@ export async function getGeneratedApp(id: number): Promise<GeneratedAppDTO | nul
 
 export async function generateTemplateApp(input: { prompt: string }): Promise<GeneratedAppDTO> {
   const userId = await getCurrentDatabaseUserId();
+  const subscription = await getCurrentSubscription();
+  if (!subscription.isPro) {
+    throw new Error("AI Template Builder is available on the Pro plan.");
+  }
   const prompt = input.prompt.trim().slice(0, 1500);
   if (prompt.length < 8) throw new Error("Describe the app you want in a little more detail.");
 

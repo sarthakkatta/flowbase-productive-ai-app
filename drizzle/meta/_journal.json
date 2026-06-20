@@ -50,6 +50,20 @@
       "when": 1781842604057,
       "tag": "0006_mighty_red_shift",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781860500000,
+      "tag": "0007_ai_template_builder",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1781942520929,
+      "tag": "0008_settings_billing",
+      "breakpoints": true
     }
   ]
 }

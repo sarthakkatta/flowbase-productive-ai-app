@@ -19,6 +19,8 @@ import {
   type KanbanTaskInput,
 } from "@/lib/kanban";
 import { syncCurrentUserToDatabase } from "@/lib/sync-user";
+import { planLimits } from "@/lib/plans";
+import { assertWithinLimit, getCurrentSubscription } from "@/lib/subscription";
 
 async function getCurrentDatabaseUserId() {
   const { userId: clerkUserId } = await auth();
@@ -68,6 +70,9 @@ function toTaskDTO(task: typeof kanbanTasks.$inferSelect): KanbanTaskDTO {
     dueDate: task.dueDate,
     priority: normalizePriority(task.priority),
     labels: task.labels,
+    categoryName: task.categoryName,
+    categoryColor: task.categoryColor,
+    categoryIcon: task.categoryIcon,
     syncToCalendar: task.syncToCalendar === 1,
     linkToNotes: task.linkToNotes === 1,
     position: task.position,
@@ -256,6 +261,17 @@ export async function createKanbanBoard(input: KanbanBoardInput): Promise<Kanban
     throw new Error("Add a board name before creating it.");
   }
 
+  const [subscription, existingBoards] = await Promise.all([
+    getCurrentSubscription(),
+    db.query.kanbanBoards.findMany({ where: eq(kanbanBoards.userId, userId), columns: { id: true } }),
+  ]);
+  assertWithinLimit({
+    isPro: subscription.isPro,
+    current: existingBoards.length,
+    limit: planLimits.free.boards,
+    label: "3 Kanban boards",
+  });
+
   const now = new Date();
   const [board] = await db
     .insert(kanbanBoards)
@@ -363,6 +379,19 @@ export async function createKanbanTask(input: KanbanTaskInput): Promise<KanbanTa
     throw new Error("Add a task title before saving.");
   }
 
+  const ownedBoards = await db.query.kanbanBoards.findMany({ where: eq(kanbanBoards.userId, userId), columns: { id: true } });
+  const ownedBoardIds = ownedBoards.map((board) => board.id);
+  const existingTasks = ownedBoardIds.length
+    ? await db.query.kanbanTasks.findMany({ where: inArray(kanbanTasks.boardId, ownedBoardIds), columns: { id: true } })
+    : [];
+  const subscription = await getCurrentSubscription();
+  assertWithinLimit({
+    isPro: subscription.isPro,
+    current: existingTasks.length,
+    limit: planLimits.free.tasks,
+    label: "25 tasks",
+  });
+
   const labels = normalizeLabels(input.labels);
   const currentTasks = await db.query.kanbanTasks.findMany({
     where: eq(kanbanTasks.columnId, input.columnId),
@@ -382,6 +411,9 @@ export async function createKanbanTask(input: KanbanTaskInput): Promise<KanbanTa
       dueDate: input.dueDate,
       priority: input.priority,
       labels,
+      categoryName: input.categoryName?.trim() || null,
+      categoryColor: input.categoryColor?.trim() || null,
+      categoryIcon: input.categoryIcon?.trim() || null,
       syncToCalendar: input.syncToCalendar ? 1 : 0,
       linkToNotes: input.linkToNotes ? 1 : 0,
       position: (currentTasks[0]?.position ?? -1) + 1,
@@ -427,6 +459,9 @@ export async function updateKanbanTask(taskId: number, input: KanbanTaskInput): 
       dueDate: input.dueDate,
       priority: input.priority,
       labels,
+      categoryName: input.categoryName?.trim() || null,
+      categoryColor: input.categoryColor?.trim() || null,
+      categoryIcon: input.categoryIcon?.trim() || null,
       syncToCalendar: input.syncToCalendar ? 1 : 0,
       linkToNotes: input.linkToNotes ? 1 : 0,
       updatedAt: new Date(),

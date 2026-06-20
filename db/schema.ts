@@ -74,6 +74,9 @@ export const kanbanTasks = pgTable("kanban_tasks", {
   dueDate: text("due_date").notNull(),
   priority: text("priority").notNull(),
   labels: jsonb("labels").$type<Array<{ name: string; color: string }>>().notNull(),
+  categoryName: text("category_name"),
+  categoryColor: text("category_color"),
+  categoryIcon: text("category_icon"),
   syncToCalendar: integer("sync_to_calendar").notNull().default(0),
   linkToNotes: integer("link_to_notes").notNull().default(0),
   position: integer("position").notNull(),
@@ -114,6 +117,9 @@ export const notes = pgTable("notes", {
   plainText: text("plain_text").notNull().default(""),
   color: text("color").notNull(),
   icon: text("icon").notNull().default("sticky-note"),
+  categoryName: text("category_name"),
+  categoryColor: text("category_color"),
+  categoryIcon: text("category_icon"),
   pinned: boolean("pinned").notNull().default(false),
   trashedAt: timestamp("trashed_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -285,6 +291,101 @@ export const generatedApps = pgTable(
   ]
 );
 
+export const userSettings = pgTable("user_settings", {
+  userId: integer("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  preferences: jsonb("preferences")
+    .$type<{
+      theme: "light" | "dark" | "system";
+      accentColor: string;
+      defaultCalendarView: "day" | "week" | "month";
+      defaultTaskPriority: "low" | "medium" | "high";
+      autoSave: boolean;
+      dateFormat: string;
+      timeFormat: "12h" | "24h";
+      startOfWeek: "sunday" | "monday";
+      compactMode: boolean;
+      showCompletedTasks: boolean;
+    }>()
+    .notNull(),
+  notifications: jsonb("notifications")
+    .$type<{
+      email: boolean;
+      taskReminders: boolean;
+      dueDateAlerts: boolean;
+      comments: boolean;
+      marketing: boolean;
+      systemUpdates: boolean;
+      pushBrowser: boolean;
+      pushMobile: boolean;
+    }>()
+    .notNull(),
+  privacy: jsonb("privacy")
+    .$type<{
+      twoFactorEnabled: boolean;
+      aiDataUsage: boolean;
+      activeSessionAlerts: boolean;
+      loginHistory: boolean;
+    }>()
+    .notNull(),
+  ai: jsonb("ai")
+    .$type<{
+      preferredModel: "smart" | "fast" | "advanced";
+      defaultModel: "smart" | "fast" | "advanced";
+      behavior: "helpful" | "balanced" | "creative";
+      tone: "friendly" | "professional" | "casual" | "formal";
+      outputLanguage: string;
+      features: {
+        refine: boolean;
+        assistant: boolean;
+        templateBuilder: boolean;
+        diagram: boolean;
+        autoSuggestions: boolean;
+        summarization: boolean;
+        notes: boolean;
+        tasks: boolean;
+      };
+    }>()
+    .notNull(),
+  integrations: jsonb("integrations")
+    .$type<{
+      googleCalendar: boolean;
+      slack: boolean;
+      notion: boolean;
+    }>()
+    .notNull(),
+  usage: jsonb("usage")
+    .$type<{
+      aiActionsToday: number;
+      aiActionsDate: string;
+    }>()
+    .notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const userCategories = pgTable(
+  "user_categories",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    scope: text("scope").notNull(),
+    name: text("name").notNull(),
+    color: text("color").notNull(),
+    icon: text("icon").notNull(),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("user_categories_user_scope_idx").on(table.userId, table.scope),
+    uniqueIndex("user_categories_user_scope_name_unique").on(table.userId, table.scope, table.name),
+  ]
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type CalendarItem = typeof calendarItems.$inferSelect;
@@ -311,3 +412,6 @@ export type PageUserState = typeof pageUserStates.$inferSelect;
 export type PageLink = typeof pageLinks.$inferSelect;
 export type GeneratedApp = typeof generatedApps.$inferSelect;
 export type NewGeneratedApp = typeof generatedApps.$inferInsert;
+export type UserSettings = typeof userSettings.$inferSelect;
+export type UserCategory = typeof userCategories.$inferSelect;
+export type NewUserCategory = typeof userCategories.$inferInsert;
