@@ -32,7 +32,7 @@ const navigationGroups = [
   {
     label: "Workspace",
     items: [
-      { label: "Dashboard", href: "/", icon: LayoutDashboard, color: "text-[#ff6b4a]" },
+      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, color: "text-[#ff6b4a]" },
       { label: "AI Assistant", href: "/ai-assistant", icon: Bot, color: "text-[#7c5cff]" },
       { label: "Calendar", href: "/calendar", icon: CalendarDays, color: "text-[#00a7e1]" },
       { label: "Task / Kanban", href: "/kanban", icon: CheckSquare, color: "text-[#00b894]" },
@@ -127,8 +127,8 @@ export function AppShell({ children, eyebrow, title, searchPlaceholder = "Search
                     const active =
                       activePage === "settings" && item.href === "/settings"
                         ? true
-                        : item.href === "/"
-                          ? pathname === "/"
+                        : item.href === "/dashboard"
+                          ? pathname === "/dashboard"
                           : item.href !== "#" && pathname.startsWith(item.href);
 
                     return (

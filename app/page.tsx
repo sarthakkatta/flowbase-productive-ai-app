@@ -1,8 +1,5 @@
-import { getDashboardOverview } from "@/app/dashboard/actions";
-import { DashboardLayout } from "@/components/dashboard-layout";
+import { LandingPage } from "@/components/landing-page";
 
-export default async function Home() {
-  const overview = await getDashboardOverview();
-
-  return <DashboardLayout overview={overview} />;
+export default function Home() {
+  return <LandingPage />;
 }
