@@ -5,13 +5,13 @@ export type PlanSlug = typeof FREE_PLAN_SLUG | typeof PRO_PLAN_SLUG;
 
 export const planLimits = {
   free: {
-    boards: 3,
-    tasks: 25,
-    notes: 10,
-    spaces: 2,
-    whiteboards: 2,
-    aiActionsPerDay: 5,
-    aiTemplateBuilder: false,
+    boards: Infinity,
+    tasks: Infinity,
+    notes: Infinity,
+    spaces: Infinity,
+    whiteboards: Infinity,
+    aiActionsPerDay: Infinity,
+    aiTemplateBuilder: true,
   },
   pro: {
     boards: Infinity,
