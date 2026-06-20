@@ -6,7 +6,10 @@ import { and, desc, eq, ilike, isNotNull, isNull, or } from "drizzle-orm";
 
 import { db, notes, users } from "@/db";
 import { defaultNoteContent, noteColorOptions, type NoteDTO, type NoteUpdateInput } from "@/lib/notes";
+import { planLimits } from "@/lib/plans";
 import { syncCurrentUserToDatabase } from "@/lib/sync-user";
+import { assertWithinLimit, getCurrentSubscription } from "@/lib/subscription";
+import { consumeAiAction } from "@/lib/usage";
 
 const refineInstructions = {
   grammar: "Improve grammar and spelling while preserving the original meaning and style.",
@@ -27,6 +30,9 @@ function toNoteDTO(note: typeof notes.$inferSelect): NoteDTO {
     plainText: note.plainText,
     color: note.color,
     icon: note.icon,
+    categoryName: note.categoryName,
+    categoryColor: note.categoryColor,
+    categoryIcon: note.categoryIcon,
     pinned: note.pinned,
     trashedAt: note.trashedAt?.toISOString() ?? null,
     createdAt: note.createdAt.toISOString(),
@@ -96,6 +102,17 @@ export async function listTrashedNotes(): Promise<NoteDTO[]> {
 
 export async function createNote(): Promise<NoteDTO> {
   const userId = await getCurrentDatabaseUserId();
+  const [subscription, existingNotes] = await Promise.all([
+    getCurrentSubscription(),
+    db.query.notes.findMany({ where: and(eq(notes.userId, userId), isNull(notes.trashedAt)), columns: { id: true } }),
+  ]);
+  assertWithinLimit({
+    isPro: subscription.isPro,
+    current: existingNotes.length,
+    limit: planLimits.free.notes,
+    label: "10 notes",
+  });
+
   const now = new Date();
   const [created] = await db
     .insert(notes)
@@ -106,6 +123,9 @@ export async function createNote(): Promise<NoteDTO> {
       plainText: "",
       color: noteColorOptions[0],
       icon: "sticky-note",
+      categoryName: null,
+      categoryColor: null,
+      categoryIcon: null,
       pinned: false,
       createdAt: now,
       updatedAt: now,
@@ -123,6 +143,9 @@ export async function updateNote(noteId: number, input: NoteUpdateInput): Promis
     ...(input.plainText !== undefined ? { plainText: input.plainText } : {}),
     ...(input.color !== undefined ? { color: normalizeColor(input.color) } : {}),
     ...(input.icon !== undefined ? { icon: input.icon } : {}),
+    ...(input.categoryName !== undefined ? { categoryName: input.categoryName?.trim() || null } : {}),
+    ...(input.categoryColor !== undefined ? { categoryColor: input.categoryColor?.trim() || null } : {}),
+    ...(input.categoryIcon !== undefined ? { categoryIcon: input.categoryIcon?.trim() || null } : {}),
     ...(input.pinned !== undefined ? { pinned: input.pinned } : {}),
     updatedAt: new Date(),
   };
@@ -160,6 +183,9 @@ export async function duplicateNote(noteId: number): Promise<NoteDTO> {
       plainText: source.plainText,
       color: source.color,
       icon: source.icon,
+      categoryName: source.categoryName,
+      categoryColor: source.categoryColor,
+      categoryIcon: source.categoryIcon,
       pinned: false,
       createdAt: now,
       updatedAt: now,
@@ -203,7 +229,8 @@ export async function refineSelectedNoteText(input: {
   text: string;
   instruction: RefineInstruction;
 }): Promise<string> {
-  await getCurrentDatabaseUserId();
+  const userId = await getCurrentDatabaseUserId();
+  await consumeAiAction(userId);
 
   const text = input.text.trim();
   const instruction = refineInstructions[input.instruction];

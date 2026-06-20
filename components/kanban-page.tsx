@@ -30,6 +30,7 @@ import {
   updateKanbanColumn,
   updateKanbanTask,
 } from "@/app/kanban/actions";
+import { listUserCategories } from "@/app/settings/actions";
 import {
   CollaborationButton,
   CollaborationPanel,
@@ -50,6 +51,7 @@ import {
   type KanbanTaskDTO,
 } from "@/lib/kanban";
 import { cn } from "@/lib/utils";
+import type { SettingsCategoryDTO } from "@/lib/settings";
 import { ClientSideSuspense, RoomProvider } from "@/liveblocks.config";
 
 type BoardDialogState = {
@@ -72,6 +74,9 @@ type TaskFormState = {
   dueDate: string;
   priority: KanbanPriority;
   labels: KanbanLabel[];
+  categoryName: string;
+  categoryColor: string;
+  categoryIcon: string;
   syncToCalendar: boolean;
   linkToNotes: boolean;
 };
@@ -90,13 +95,16 @@ function toDateKey(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function defaultTaskForm(): TaskFormState {
+function defaultTaskForm(category?: SettingsCategoryDTO): TaskFormState {
   return {
     title: "",
     description: "",
     dueDate: toDateKey(new Date()),
     priority: "medium",
     labels: defaultKanbanLabels,
+    categoryName: category?.name ?? "",
+    categoryColor: category?.color ?? "",
+    categoryIcon: category?.icon ?? "",
     syncToCalendar: false,
     linkToNotes: false,
   };
@@ -109,6 +117,9 @@ function taskToForm(task: KanbanTaskDTO): TaskFormState {
     dueDate: task.dueDate,
     priority: task.priority,
     labels: task.labels.length ? task.labels : defaultKanbanLabels,
+    categoryName: task.categoryName ?? "",
+    categoryColor: task.categoryColor ?? "",
+    categoryIcon: task.categoryIcon ?? "",
     syncToCalendar: task.syncToCalendar,
     linkToNotes: task.linkToNotes,
   };
@@ -132,6 +143,7 @@ function getFriendlyErrorMessage(error: unknown, fallback: string) {
 
 export function KanbanPage() {
   const [boards, setBoards] = useState<KanbanBoardDTO[]>([]);
+  const [taskCategories, setTaskCategories] = useState<SettingsCategoryDTO[]>([]);
   const [selectedBoardId, setSelectedBoardId] = useState<number | null>(null);
   const [boardDialog, setBoardDialog] = useState<BoardDialogState>({
     open: false,
@@ -164,8 +176,9 @@ export function KanbanPage() {
     startTransition(async () => {
       try {
         setError(null);
-        const nextBoards = await listKanbanBoards();
+        const [nextBoards, categories] = await Promise.all([listKanbanBoards(), listUserCategories("task")]);
         setBoards(nextBoards);
+        setTaskCategories(categories);
         setSelectedBoardId((current) => current ?? nextBoards[0]?.id ?? null);
       } catch (nextError) {
         setError(getFriendlyErrorMessage(nextError, "Unable to load Kanban boards."));
@@ -282,7 +295,7 @@ export function KanbanPage() {
 
   function openCreateTask(boardId: number, columnId: number) {
     setTaskDialog({ open: true, mode: "create", boardId, columnId, taskId: null });
-    setTaskForm(defaultTaskForm());
+    setTaskForm(defaultTaskForm(taskCategories[0]));
   }
 
   function openEditTask(task: KanbanTaskDTO) {
@@ -320,6 +333,9 @@ export function KanbanPage() {
       dueDate: taskForm.dueDate,
       priority: taskForm.priority,
       labels: taskForm.labels,
+      categoryName: taskForm.categoryName || null,
+      categoryColor: taskForm.categoryColor || null,
+      categoryIcon: taskForm.categoryIcon || null,
       syncToCalendar: taskForm.syncToCalendar,
       linkToNotes: taskForm.linkToNotes,
     };
@@ -620,6 +636,7 @@ export function KanbanPage() {
                     onClose={closeTaskDialog}
                     onSave={saveTask}
                     isPending={isPending}
+                    categories={taskCategories}
                   />
                 ) : null}
 
@@ -738,6 +755,12 @@ function TaskCard({
               <CalendarDays className="size-3" aria-hidden="true" />
               {task.dueDate}
             </span>
+            {task.categoryName ? (
+              <span className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-[#f8f7f2] px-2 py-1 text-[11px] font-semibold text-[#665f55]">
+                <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: task.categoryColor ?? "#256f63" }} />
+                <span className="truncate">{task.categoryName}</span>
+              </span>
+            ) : null}
           </div>
         </div>
         <button
@@ -806,6 +829,7 @@ function TaskDialog({
   onClose,
   onSave,
   isPending,
+  categories,
 }: {
   form: TaskFormState;
   setForm: Dispatch<SetStateAction<TaskFormState>>;
@@ -813,6 +837,7 @@ function TaskDialog({
   onClose: () => void;
   onSave: () => void;
   isPending: boolean;
+  categories: SettingsCategoryDTO[];
 }) {
   function updateLabel(index: number, nextLabel: Partial<KanbanLabel>) {
     setForm((current) => ({
@@ -882,6 +907,31 @@ function TaskDialog({
               </select>
             </label>
           </div>
+
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-[#665f55]">Category</span>
+            <select
+              value={form.categoryName}
+              onChange={(event) => {
+                const category = categories.find((item) => item.name === event.target.value);
+                setForm((current) => ({
+                  ...current,
+                  categoryName: category?.name ?? "",
+                  categoryColor: category?.color ?? "",
+                  categoryIcon: category?.icon ?? "",
+                }));
+              }}
+              className="h-10 w-full rounded-lg border border-[#e7e1d6] bg-white px-3 text-sm outline-none focus:border-[#256f63]"
+            >
+              <option value="">No category</option>
+              {form.categoryName && !categories.some((category) => category.name === form.categoryName) ? (
+                <option value={form.categoryName}>{form.categoryName}</option>
+              ) : null}
+              {categories.map((category) => (
+                <option key={category.id} value={category.name}>{category.name}</option>
+              ))}
+            </select>
+          </label>
 
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-3">

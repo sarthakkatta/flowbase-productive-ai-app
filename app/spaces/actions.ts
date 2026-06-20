@@ -38,6 +38,8 @@ import {
   type SpaceSort,
 } from "@/lib/spaces";
 import { syncCurrentUserToDatabase } from "@/lib/sync-user";
+import { planLimits } from "@/lib/plans";
+import { assertWithinLimit, getCurrentSubscription } from "@/lib/subscription";
 
 async function getCurrentDatabaseUser() {
   const { userId: clerkUserId } = await auth();
@@ -118,8 +120,10 @@ async function seedStarterSpaces(userId: number) {
     ["Archive", "Old projects and completed work.", "#64748b"],
   ] as const;
 
+  const subscription = await getCurrentSubscription();
+  const availableStarterSpaces = subscription.isPro ? starterSpaces : starterSpaces.slice(0, planLimits.free.spaces);
   const created = await db.insert(spaces).values(
-    starterSpaces.map(([name, description, color], index) => ({
+    availableStarterSpaces.map(([name, description, color], index) => ({
       ownerId: userId,
       name,
       description,
@@ -353,6 +357,16 @@ export async function getPage(pageId: number): Promise<{ page: PageDTO; space: S
 
 export async function createSpace(input: { name: string; description?: string; color?: string }): Promise<SpaceDTO> {
   const user = await getCurrentDatabaseUser();
+  const [subscription, ownedSpaces] = await Promise.all([
+    getCurrentSubscription(),
+    db.query.spaces.findMany({ where: eq(spaces.ownerId, user.id), columns: { id: true } }),
+  ]);
+  assertWithinLimit({
+    isPro: subscription.isPro,
+    current: ownedSpaces.length,
+    limit: planLimits.free.spaces,
+    label: "2 spaces",
+  });
   const name = input.name.trim();
   if (!name) throw new Error("Add a space name before creating it.");
   const now = new Date();
@@ -411,6 +425,16 @@ export async function archiveSpace(spaceId: number, archived: boolean): Promise<
 
 export async function duplicateSpace(spaceId: number): Promise<number> {
   const user = await getCurrentDatabaseUser();
+  const [subscription, ownedSpaces] = await Promise.all([
+    getCurrentSubscription(),
+    db.query.spaces.findMany({ where: eq(spaces.ownerId, user.id), columns: { id: true } }),
+  ]);
+  assertWithinLimit({
+    isPro: subscription.isPro,
+    current: ownedSpaces.length,
+    limit: planLimits.free.spaces,
+    label: "2 spaces",
+  });
   const source = await assertSpaceAccess(spaceId, user.id);
   const sourcePages = await db.query.workspacePages.findMany({ where: and(eq(workspacePages.spaceId, spaceId), isNull(workspacePages.archivedAt)) });
   const now = new Date();
