@@ -12,5 +12,5 @@ export async function GET() {
 
   await syncCurrentUserToDatabase();
 
-  redirect("/");
+  redirect("/dashboard");
 }

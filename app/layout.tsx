@@ -6,8 +6,9 @@ import type { Metadata } from "next";
 import { AppLiveblocksProvider } from "@/components/liveblocks-provider";
 
 export const metadata: Metadata = {
-  title: "Next.js Premium Startup Boilerplate",
-  description: "Created using the ultimate interactive Next.js stack generator CLI.",
+  title: "Flowbase | AI productivity workspace",
+  description:
+    "Flowbase brings notes, tasks, whiteboards, calendars, AI templates, and team collaboration into one focused workspace.",
 };
 
 export default function RootLayout({
