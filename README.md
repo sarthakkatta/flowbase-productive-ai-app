@@ -2,7 +2,7 @@
 
 Flowbase is a full-stack productivity workspace built with Next.js, TypeScript, Clerk, Neon Postgres, Drizzle ORM, Gemini AI, Liveblocks, TipTap, Excalidraw, and AssemblyAI.
 
-I built it as an all-in-one workspace where a user can manage notes, tasks, calendars, whiteboards, project spaces, AI-generated templates, and daily planning from one dashboard.
+I built it as an all-in-one workspace where a user can manage notes, tasks, calendars, whiteboards, project spaces, AI-generated templates, and daily planning from one dashboard. 
 
 ## Features
 
