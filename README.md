@@ -2,7 +2,7 @@
 
 Flowbase is a full-stack productivity workspace built with Next.js, TypeScript, Clerk, Neon Postgres, Drizzle ORM, Gemini AI, Liveblocks, TipTap, Excalidraw, and AssemblyAI.
 
-I built it as an all-in-one workspace where a user can manage notes, tasks, calendars, whiteboards, project spaces, AI-generated templates, and daily planning from one dashboard. 
+I built it as an all-in-one workspace where a user can manage notes, tasks, calendars, whiteboards, project spaces, AI-generated templates, and daily planning from one dashboard.
 
 ## Features
 
@@ -23,6 +23,7 @@ I built it as an all-in-one workspace where a user can manage notes, tasks, cale
 | Area | Tech |
 |---|---|
 | Frontend | Next.js, React, TypeScript, Tailwind CSS |
+| Backend | Next.js Server Actions, API Routes |
 | Auth | Clerk |
 | Database | Neon Postgres |
 | ORM | Drizzle ORM |
@@ -45,11 +46,24 @@ hooks/          Custom React hooks
 
 ## How It Works
 
-Flowbase uses Clerk for authentication. After login, the user is synced into the local database so all app data can be connected to an internal user record.
+Flowbase is a full-stack Next.js application. Its backend lives inside the same project and uses Next.js Server Actions and API routes for application logic, database work, authentication checks, and third-party integrations.
 
-Most feature logic is handled through server actions. The frontend calls these actions for creating notes, calendar items, Kanban boards, tasks, whiteboards, workspace pages, and settings updates.
+Clerk manages sign-in and sign-up. After login, the user is synced to the local database so notes, tasks, boards, and other workspace data can be associated with an internal user record.
 
-The AI features run on the server side through Gemini. For the AI Template Builder, the model does not generate executable code. It returns a structured JSON definition, which is then rendered safely using predefined React components.
+The AI features run server-side through Gemini. For the AI Template Builder, the model returns a structured JSON definition instead of executable code. The interface validates and renders that JSON using predefined React components.
+
+### Backend
+
+The backend is built into the Next.js application using Server Actions and API routes. This keeps the frontend and application logic in one codebase while still separating feature-specific server logic cleanly.
+
+It handles:
+
+- Database operations through Drizzle ORM and Neon Postgres
+- Authentication and authorization checks with Clerk
+- CRUD operations for notes, tasks, boards, calendar items, spaces, and whiteboards
+- AI requests through the Gemini API
+- Voice token handling for AssemblyAI
+- Collaboration access and authentication for Liveblocks
 
 ## Getting Started
 
@@ -173,6 +187,17 @@ The main goal was to build a realistic SaaS-style productivity app, not just sep
 - Dashboard aggregates data across multiple features
 - AI Assistant can create objects across the app
 - Shared boards and spaces use access checks before allowing collaboration
+
+## Future Improvements
+
+Some things I would improve next:
+
+- Add automated tests for server actions and important workflows
+- Add real billing and subscription enforcement
+- Improve notification and reminder scheduling
+- Add deeper roles for collaboration
+- Add more analytics to the dashboard
+- Improve mobile interactions for large boards and whiteboards
 
 ## Author
 
